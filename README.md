@@ -10,11 +10,10 @@ This repository contains the code and resources for the research paper, "Geometr
   - [Appearance-Based Approach](#appearance-based-approach)
 - [Code Structure](#code-structure)
 - [Setup and Installation](#setup-and-installation)
-- [Usage](#usage)
-- [Corrections and Improvements](#corrections-and-improvements)
-- [Results](#results)
+- [How to run](#how-to-run)
+- [Changes to make it run today](#changes-to-make-it-run-today-hubrefine)
+- [Results](#results-already-in-the-repo-produced-on-colab-by-the-original-author)
 - [Contributing](#contributing)
-- [License](#license)
 
 ## Project Overview
 
@@ -56,54 +55,62 @@ This method leverages the power of deep learning:
 
 ## Code Structure
 
-The implementation is provided in the `cwANN_.ipynb` Jupyter Notebook. The key sections of the notebook are:
-- **Library Imports:** Necessary libraries such as `dlib`, `face_recognition`, `OpenCV`, `TensorFlow/Keras`, and `scikit-learn` are imported.
-- **Data Loading:** The Fer2013 dataset is loaded and preprocessed.
-- **Feature Extraction:** Implementation of both geometric and appearance-based feature extraction.
-- **Model Implementation:**
-  - **MLP:** With Bayesian optimization for hyperparameter tuning.
-  - **CNN:** For end-to-end image classification.
+| File | What it is |
+|---|---|
+| `cwANN_.ipynb` | The project: geometric features -> MLP, CNN on pixels, and a combined MLP+CNN model (originally run on Google Colab). |
+| `cwANN.pdf` | The coursework paper. |
+| `requirements.txt` | Pinned dependencies (tested with Python 3.11). |
+| `smoke_data.py`, `run_smoke_test.sh` | Smoke test on tiny synthetic data (no dataset needed). |
+| `Thesis_seg.ipynb`, `Untitled-1.ipynb` | Not part of this project's pipeline: a Colab experiment on a breast-cancer-mammogram segmentation thesis (`Thesis_seg`) and early exploratory cells for this project (`Untitled-1`). Kept as uploaded, not fixed, they do not run. |
+
+Notebook flow: load `icml_face_data.csv` -> face landmarks with `face_recognition` (dlib) -> distance / shape / texture
+signatures and 9 statistics each (27 geometric features) -> MLP tuned with `BayesSearchCV` -> CNN on the 48x48 images ->
+CNN + MLP combined. Cells after the `# Else` heading are abandoned scratch work and are expected to fail.
 
 ## Setup and Installation
 
-To run the code in this repository, you need to have Python installed, along with the necessary libraries. You can install the required libraries using pip:
-
 ```bash
-pip install -r requirements.txt
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt     # dlib is compiled from source (cmake + C++ compiler needed; ~6 min)
 ```
 
-**requirements.txt:**
-```
-dlib
-face_recognition
-opencv-python
-tensorflow
-keras
-scikit-learn
-scikit-optimize
-pandas
-numpy
-matplotlib
-seaborn
-```
+## How to run
 
-## Usage
+1. Get the **Fer2013** `icml_face_data.csv` from [Kaggle](https://www.kaggle.com/datasets/deadskull7/fer2013) (it is *not* in this repo)
+   and put it in a folder, e.g. `data/`.
+2. `export EMOTION_DATA_DIR=data` (default is the current folder; on Colab it is the original Drive folder
+   `/content/drive/MyDrive/Colab Notebooks`), then open `cwANN_.ipynb` in Jupyter and run the cells down to `# Else`.
+   Landmark detection over the whole dataset and the Bayesian search are slow (hours on CPU).
+3. **Smoke test, no dataset needed:** `./run_smoke_test.sh` executes the notebook on 300 synthetic random images
+   (stub landmarks, 1 epoch, 1 search iteration). It only shows that the code runs; its accuracy is chance-level and means nothing.
 
-You can run the Jupyter Notebook `cwANN_.ipynb` to see the implementation of the emotion recognition models. The notebook is self-contained and includes all the steps from data loading to model evaluation.
+## Changes to make it run today (HubRefine)
 
-## Improvements to the code
+- Colab-only pieces made optional (Drive mount, hard-coded `/content/drive/...` paths -> `DATA_DIR`).
+- `keras.wrappers.scikit_learn.KerasClassifier` no longer exists -> `scikeras` (search keys now `model__*`).
+- `from scipy.stats import *` shadowed the builtin `abs()` in current SciPy -> removed.
+- `Adam(lr=)`, `ReduceLROnPlateau(model=)`, `.h5` checkpoint name, removed `keras.utils.vis_utils` import updated for Keras 3.
+- Fixed a syntax error (`ImageDataGenerator(horizontal_flip=True, br)`), an undefined variable (`dfO_`), the CNN pixel column
+  (`df['pixels']` was already an array), and `model.evaluate(...)` in the combined model, which was called without labels.
+  The recorded `Test Accuracy: 0.0` output of that cell came from this bug; the notebook's own classification report gives the combined model 0.68.
+- `n_jobs` of the Bayesian search is `-1` (all cores), as the old README claimed (the notebook used 25).
+- Pinned `pandas==2.2.3`: pandas 3 silently ignores the chained assignments the notebook relies on.
 
-The following improvement have been made to the original code for better structure and performance:
+## Results (already in the repo, produced on Colab by the original author)
 
-1.  **Added `if __name__ == "__main__"` block:** Encapsulated the main script logic in a `if __name__ == "__main__"` block to ensure it runs only when the script is executed directly.
+These numbers are the recorded outputs in `cwANN_.ipynb` / `cwANN.pdf`. They were **not** reproduced here: the Fer2013 data
+is not in the repo and was not downloaded, so treat them as the original claims.
 
-2.  **Removed Redundant Data Loading:** The dataset is now loaded only once to avoid redundancy and improve code clarity.
+| Model | Accuracy | Source |
+|---|---|---|
+| MLP, 27 geometric features (best of Bayesian search: tanh, adam, MSLE loss, dropout 0.35) | 0.365 CV score on train; 0.36 on test (4958 images with detected landmarks) | `cwANN_.ipynb` cells 64 and 69; `cwANN.pdf` ("37% training, 36% testing") |
+| CNN on pixels | 0.666 on the (flip-augmented) test generator, 7178 images | `cwANN_.ipynb` cell 85; `cwANN.pdf` (72.5% train / 66.6% test) |
+| CNN + MLP combined | 0.68 on test (4958 images with detected landmarks) | `cwANN_.ipynb` cell 108; `cwANN.pdf` (80.4% train / 68.1% test) |
 
-3.  **Optimized Bayesian Search:** The `n_jobs` parameter in `BayesSearchCV` is set to `-1` to utilize all available CPU cores for more efficient hyperparameter tuning.
-
-## Results
-
-The paper and the code demonstrate that the appearance-based approach using a CNN generally outperforms the geometric-based approach with an MLP on the Fer2013 dataset. The combination of both approaches, however, can lead to even better performance, suggesting that both geometric and appearance features contain valuable information for emotion recognition.
+Caveats: the three rows are not measured on the same test images (the geometric and combined models only see faces where
+landmarks were found, 4958 of the 7178 test images), and the CNN row evaluates on a generator that applies random horizontal flips.
+So "the combined model is better" (0.68 vs 0.666) is suggestive, not a controlled comparison. One recorded output
+(`len(df_train_X)` = 39249) is larger than the 28709 Fer2013 training images and comes from a different run; its source is unknown.
 
 ## Contributing
 
