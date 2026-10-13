@@ -15,3 +15,5 @@ fer2013*
 *.h5
 network.png
 my.png
+.pytest_cache/
+__pycache__/
