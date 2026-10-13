@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.idea/
+bin/
+obj/
+out/
+.venv/
+venv/
+.env
+# data and generated files
+icml_face_data.csv
+DataFrame.csv
+fer2013*
+*.h5
+network.png
+my.png
